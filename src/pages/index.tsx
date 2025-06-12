@@ -167,7 +167,7 @@ export default function Home() {
               height={100}
               waveColor="#4F4A85"
               progressColor="#383351"
-              url="/loudness-optimiizer/empty.wav"
+              url="/loudness-optimizer/empty.wav"
               onReady={onReady}
               onError={(e) => console.error("Wavesurfer error:", e)}
               onPlay={() => setIsPlaying(true)}
