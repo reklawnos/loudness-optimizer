@@ -7,6 +7,14 @@ export interface LufsMeterResult {
   maxLoudness: number;
 }
 
+function sum(arr: number[]): number {
+  let total = 0;
+  for (let i = 0; i < arr.length; i++) {
+    total += arr[i];
+  }
+  return total;
+}
+
 export class LufsMeter {
   private static readonly BLOCK_DURATION = 0.4; // 400 ms
   private static readonly OVERLAP = 0.75; // 75% overlap
@@ -25,7 +33,7 @@ export class LufsMeter {
     const length = Math.min(...filteredChannels.map((ch) => ch.length));
     const numBlocks = Math.max(
       LufsMeter.MIN_BLOCKS,
-      Math.floor((length - blockSize) / hopSize) + 1
+      Math.round((length - blockSize) / hopSize) + 1
     );
 
     // Step 3: Calculate loudness for each block (combine channels at block level)
@@ -56,7 +64,6 @@ export class LufsMeter {
             blockRms.reduce((s, r) => s + r[blockIdx], 0) + Number.EPSILON
           );
     }
-
     // Step 4: Calculate relative threshold (gating)
     // Blocks with loudness above the absolute gate
     const initialGatedBlocks = blockLoudness
@@ -64,6 +71,7 @@ export class LufsMeter {
       .filter(([, l]) => l >= LufsMeter.ABSOLUTE_GATE)
       .map(([i]) => i)
       .toArray();
+
     const perChannelMeans = blockRms.map(
       (rms) =>
         initialGatedBlocks.reduce((sum, blockIdx) => {
@@ -73,14 +81,14 @@ export class LufsMeter {
 
     // Simple sum of each channel
     // TODO: update to have channel-specific gain
-    const sumOfMeans = perChannelMeans.reduce((sum, mean) => sum + mean, 0);
+    const sumOfMeans = sum(perChannelMeans);
 
     const relativeThreshold = -0.691 + 10 * Math.log10(sumOfMeans) - 10;
 
     // Apply gating to blocks
     const finalGatedBlocks = blockLoudness
       .entries()
-      .filter(([, l]) => l > LufsMeter.ABSOLUTE_GATE && l > relativeThreshold)
+      .filter(([, l]) => l > relativeThreshold && l > LufsMeter.ABSOLUTE_GATE)
       .map(([i]) => i)
       .toArray();
 
@@ -96,7 +104,7 @@ export class LufsMeter {
     if (finalGatedBlocks.length > 0) {
       // Simple sum of each channel
       // TODO: update to have channel-specific gain
-      const sumOfAverages = avergePerChannel.reduce((sum, avg) => sum + avg, 0);
+      const sumOfAverages = sum(avergePerChannel);
       integratedLufs = -0.691 + 10 * Math.log10(sumOfAverages);
     }
 
