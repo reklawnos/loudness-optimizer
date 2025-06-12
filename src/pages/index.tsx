@@ -1,17 +1,22 @@
-import { Geist, Geist_Mono } from "next/font/google";
 import { useState, useCallback, useEffect } from "react";
+import Head from "next/head";
 import { LufsMeter, LufsMeterResult } from "@/processing/LufsMeter";
 import WavesurferPlayer from "@wavesurfer/react";
-import { LineChart } from "@mui/x-charts/LineChart";
+import { ChartContainer } from "@mui/x-charts/ChartContainer";
+import { ChartsReferenceLine } from "@mui/x-charts/ChartsReferenceLine";
+import { LinePlot, MarkPlot } from "@mui/x-charts/LineChart";
+import { ChartsXAxis } from "@mui/x-charts/ChartsXAxis";
+import { ChartsYAxis } from "@mui/x-charts/ChartsYAxis";
+import { ChartsTooltip } from "@mui/x-charts/ChartsTooltip";
+import { ChartsAxisHighlight } from "@mui/x-charts/ChartsAxisHighlight";
+import { LineHighlightPlot } from "@mui/x-charts/LineChart";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const darkTheme = createTheme({
+  palette: {
+    mode: "dark",
+  },
 });
 
 function useAudioDrop(
@@ -24,7 +29,7 @@ function useAudioDrop(
   const [dragActive, setDragActive] = useState(false);
 
   const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>) => {
+    async (e: React.DragEvent<Document>) => {
       e.preventDefault();
       setDragActive(false);
       const file = e.dataTransfer.files[0];
@@ -53,7 +58,7 @@ function useAudioDrop(
     [onAudioDecoded]
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((e: React.DragEvent<Document>) => {
     e.preventDefault();
     setDragActive(true);
   }, []);
@@ -67,12 +72,16 @@ function useAudioDrop(
     handleDragLeave,
   };
 }
-
+function formatTimeStamp(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = (seconds % 60).toFixed(0).padStart(2, "0");
+  return `${m}:${s}`;
+}
 export default function Home() {
+  const [playheadPos, setPlayheadPos] = useState(0);
   const [wavesurfer, setWavesurfer] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const onReady = (ws) => {
-    console.log("ready!");
     setWavesurfer(ws);
     setIsPlaying(false);
   };
@@ -101,93 +110,223 @@ export default function Home() {
       wavesurfer.loadBlob(audioData?.blob);
     });
 
-  useEffect(() => {
-    console.log(audioData);
-  });
-  return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
-    >
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <div style={{ width: 500 }}>
-          <WavesurferPlayer
-            height={100}
-            waveColor="#4F4A85"
-            progressColor="#383351"
-            url="/empty.wav"
-            onReady={onReady}
-            onError={(e) => console.error("Wavesurfer error:", e)}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-          />
-        </div>
+  const onAxisClick = (e, data) => {
+    wavesurfer.seekTo(data.axisValue / wavesurfer.getDuration());
+    wavesurfer.play();
+    setIsPlaying(true);
+  };
 
-        <button onClick={onPlayPause}>{isPlaying ? "Pause" : "Play"}</button>
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === " ") {
+        e.preventDefault();
+        onPlayPause();
+      }
+    },
+    [onPlayPause]
+  );
+
+  const onUploadClick = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "audio/*";
+    input.onchange = (e) => {
+      handleDrop({
+        dataTransfer: { files: e.target.files },
+        preventDefault: () => {},
+      } as React.DragEvent<Document>);
+    };
+    input.click();
+  }, [handleDrop]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("drop", handleDrop);
+    document.addEventListener("dragover", handleDragOver);
+    document.addEventListener("dragleave", handleDragLeave);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("drop", handleDrop);
+      document.removeEventListener("dragover", handleDragOver);
+      document.removeEventListener("dragleave", handleDragLeave);
+    };
+  });
+
+  return (
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Head>
+        <title>LUFS Gating Tool</title>
+      </Head>
+      <main className="p-10">
+        <h1 className="font-bold text-xl mb-4">LUFS Gating Tool</h1>
+        <div>
+          <div style={{ display: "none" }}>
+            <WavesurferPlayer
+              height={100}
+              waveColor="#4F4A85"
+              progressColor="#383351"
+              url="/empty.wav"
+              onReady={onReady}
+              onError={(e) => console.error("Wavesurfer error:", e)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onTimeupdate={(ws) => setPlayheadPos(ws.getCurrentTime())}
+            />
+          </div>
+        </div>
+        {!audioData && (
+          <div className="flex flex-col items-center justify-center h-screen">
+            <button
+              className="border focus:outline-none focus:ring-4 font-medium rounded-full text-xl p-10 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700 min-w-24"
+              onClick={onUploadClick}
+            >
+              Drop audio file here or click to choose file
+            </button>
+          </div>
+        )}
         {audioData && (
           <>
-            <LineChart
-              series={[
-                {
-                  label: "Momentary loudness",
-                  data: audioData.lufsData.blockLoudness,
-                  showMark: false,
-                },
-                {
-                  label: "Relative gate threshold",
-                  data: audioData.lufsData.blockLoudness.map(
-                    () => audioData.lufsData.relativeThreshold
-                  ),
-                  showMark: false,
-                },
-              ]}
-              xAxis={[
-                {
-                  data: Array.from(
-                    audioData.lufsData.blockLoudness.map((_, i) => i * 0.1)
-                  ),
-                  valueFormatter: (v: number) => {
-                    const minutes = Math.floor(v / 60);
-                    const seconds = (v % 60).toFixed(0).padStart(2, "0");
-                    return `${minutes}:${seconds}`;
+            <div>
+              <ChartContainer
+                series={[
+                  {
+                    label: "Momentary loudness",
+                    data: audioData.lufsData.blockLoudness,
+                    showMark: false,
+                    type: "line",
+                    valueFormatter: (value) => `${value?.toFixed(2)} LUFS`,
                   },
-                  // scaleType: "time",
-                },
-              ]}
-              yAxis={[
-                {
-                  min: -35,
-                  max: 0,
-                  colorMap: {
-                    type: "piecewise",
-                    colors: ["#444", "#444 ", "#4254FB"],
-                    thresholds: [
-                      -1000,
-                      audioData.lufsData.relativeThreshold,
-                      0,
-                    ],
+                ]}
+                sx={{
+                  "& .MuiLineElement-series-RelativeThreshold": {
+                    strokeDasharray: "10 5",
+                    strokeWidth: 4,
                   },
-                },
-              ]}
-              height={500}
-              width={500}
-            />
+                }}
+                xAxis={[
+                  {
+                    data: Array.from(
+                      audioData.lufsData.blockLoudness.map((_, i) => i * 0.1)
+                    ),
+                    valueFormatter: formatTimeStamp,
+                  },
+                ]}
+                yAxis={[
+                  {
+                    min: -35,
+                    max: 0,
+                    colorMap: {
+                      type: "piecewise",
+                      colors: ["#444", "#444", "#4254FB"],
+                      thresholds: [
+                        -1000,
+                        audioData.lufsData.relativeThreshold,
+                        0,
+                      ],
+                    },
+                  },
+                ]}
+                height={500}
+                onAxisClick={onAxisClick}
+              >
+                <LinePlot />
+                <ChartsAxisHighlight x="line" />
+                <MarkPlot />
+                <ChartsReferenceLine
+                  y={audioData.lufsData.relativeThreshold}
+                  lineStyle={{ strokeDasharray: "10 5", strokeWidth: 4 }}
+                />
+                <ChartsReferenceLine
+                  x={playheadPos}
+                  lineStyle={{ strokeWidth: 2, opacity: 0.5 }}
+                />
+                <ChartsXAxis />
+                <ChartsYAxis />
+                <ChartsTooltip />
+                <LineHighlightPlot />
+              </ChartContainer>
+            </div>
+            <div className="flex mt-4 gap-8 p-6 flex-wrap">
+              <div className="text-xl font-medium text-white p-2.5 px-0">
+                {formatTimeStamp(playheadPos)}
+              </div>
+              <button
+                className="border focus:outline-none focus:ring-4 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700 min-w-24"
+                onClick={onPlayPause}
+              >
+                {isPlaying ? "Pause" : "Play"}
+              </button>
+              <button
+                className="ml-auto justify-self-end border focus:outline-none focus:ring-4 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700 min-w-24"
+                onClick={onUploadClick}
+              >
+                Upload new file
+              </button>
+            </div>
+            <div className="flex flex-wrap justify-start mt-4 items-start">
+              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+                <div>
+                  <p className="text-gray-400">Integrated loudness</p>
+                  <div className="text-xl font-medium text-white">
+                    {audioData.lufsData.integratedLufs.toFixed(2)} LUFS
+                  </div>
+                  <p className="text-gray-400 mt-2 text-sm">
+                    Loudness measurement used for normalizing audio on
+                    streaming, as determined by a standardized algorithm. On
+                    Spotify, this track will be adjusted by{" "}
+                    <span className="text-white font-bold">
+                      {(-14 - audioData.lufsData.integratedLufs).toFixed(2) +
+                        " "}
+                      dB
+                    </span>{" "}
+                    to reach the target loudness of -14 LUFS.
+                  </p>
+                </div>
+              </div>
+              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+                <div>
+                  <p className="text-gray-400">Relative gating threshold</p>
+                  <div className="text-xl font-medium text-white">
+                    {audioData.lufsData.relativeThreshold.toFixed(2)} LUFS
+                  </div>
+                  <p className="text-gray-400 mt-2 text-sm">
+                    The threshold below which audio is igonored by the
+                    integrated loudness algorithm. This threshold is dependent
+                    on the average loudness of the overall track. The threshold
+                    is higher for louder tracks.
+                  </p>
+                </div>
+              </div>
+              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+                <div>
+                  <p className="text-gray-400">Measurements above threshold</p>
+                  <div className="text-xl font-medium text-white">
+                    {(audioData.lufsData.portionAboveThreshold * 100).toFixed(
+                      1
+                    )}
+                    %
+                  </div>
+                  <p className="text-gray-400 mt-2 text-sm">
+                    The amount of time the track is above the gating threshold.
+                    If parts of the track are below the threshold, raising their
+                    volume just above the threshold can reduce the overall
+                    loudness measurement.
+                  </p>
+                </div>
+              </div>
+            </div>
           </>
         )}
         <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`w-80 h-40 border-2 border-dashed rounded-lg flex items-center justify-center transition-colors ${
-            dragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 bg-white"
-          }`}
-        >
-          <span className="text-gray-500">
-            {audioData ? "Audio loaded!" : "Drag and drop an audio file here"}
-          </span>
-        </div>
+          style={{
+            visibility: dragActive ? "visible" : "hidden",
+            opacity: dragActive ? 1 : 0.5,
+          }}
+          className="dropzone"
+        />
       </main>
-    </div>
+    </ThemeProvider>
   );
 }

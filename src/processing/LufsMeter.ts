@@ -5,6 +5,7 @@ export interface LufsMeterResult {
   blockLoudness: Float32Array;
   relativeThreshold: number;
   maxLoudness: number;
+  portionAboveThreshold: number;
 }
 
 function sum(arr: number[]): number {
@@ -108,10 +109,13 @@ export class LufsMeter {
       integratedLufs = -0.691 + 10 * Math.log10(sumOfAverages);
     }
 
+    const portionAboveThreshold = finalGatedBlocks.length / numBlocks;
+
     return {
       integratedLufs,
       blockLoudness,
       relativeThreshold,
+      portionAboveThreshold,
       maxLoudness: Math.max(...blockLoudness),
     };
   }
