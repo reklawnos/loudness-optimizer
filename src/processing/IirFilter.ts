@@ -1,3 +1,33 @@
+// Adapted from https://github.com/klangfreund/LUFSMeter
+// License: MIT
+// Original author: Markus Schmidt
+function convertToSampleRate(
+  a: number[],
+  b: number[],
+  rate: number
+): [number[], number[]] {
+  if (rate === 48000) {
+    return [a, b];
+  }
+  const kOverQ = (2 - 2 * a[2]) / (a[2] - a[1] + 1);
+  const k = Math.sqrt((a[1] + a[2] + 1) / (a[2] - a[1] + 1));
+  const q = k / kOverQ;
+  const arctanK = Math.atan(k);
+  const vB = (b[0] - b[2]) / (1 - a[2]);
+  const vH = (b[0] - b[1] + b[2]) / (a[2] - a[1] + 1);
+  const vL = (b[0] + b[1] + b[2]) / (a[1] + a[2] + 1);
+
+  const newK = Math.tan((arctanK * 48000) / rate);
+  const commonFactor = 1 / (1 + newK / q + newK * newK);
+  b[0] = (vH + (vB * newK) / q + vL * newK * newK) * commonFactor;
+  b[1] = 2 * (vL * newK * newK - vH) * commonFactor;
+  b[2] = (vH - (vB * newK) / q + vL * newK * newK) * commonFactor;
+  a[0] = 1;
+  a[1] = 2 * (1 - newK * newK) * commonFactor;
+  a[2] = (1 - newK / q + newK * newK) * commonFactor;
+  return [a, b];
+}
+
 export class IirFilter {
   private readonly a: number[];
   private readonly b: number[];
@@ -11,54 +41,8 @@ export class IirFilter {
    * @param rate Sample rate in Hz
    * @param type 'HIGH_PASS' or 'HIGH_SHELF'
    */
-  constructor(
-    gain: number,
-    q: number,
-    freq: number,
-    rate: number,
-    type: "HIGH_PASS" | "HIGH_SHELF"
-  ) {
-    let a: number[] = [1, 0, 0];
-    let b: number[] = [1, 0, 0];
-
-    const w0 = (2 * Math.PI * freq) / rate;
-    const cos_w0 = Math.cos(w0);
-    const sin_w0 = Math.sin(w0);
-
-    if (type === "HIGH_PASS") {
-      const alpha = sin_w0 / (2 * q);
-
-      b[0] = (1 + cos_w0) / 2;
-      b[1] = -(1 + cos_w0);
-      b[2] = (1 + cos_w0) / 2;
-      a[0] = 1 + alpha;
-      a[1] = -2 * cos_w0;
-      a[2] = 1 - alpha;
-
-      // Normalize coefficients so that a[0] = 1
-      b = b.map((coef) => coef / a[0]);
-      a = a.map((coef) => coef / a[0]);
-      a[0] = 1;
-    } else if (type === "HIGH_SHELF") {
-      const A = Math.pow(10, gain / 40);
-      const alpha = (sin_w0 / 2) * Math.sqrt((A + 1 / A) * (1 / q - 1) + 2);
-
-      const sqrtA = Math.sqrt(A);
-
-      b[0] = A * (A + 1 + (A - 1) * cos_w0 + 2 * sqrtA * alpha);
-      b[1] = -2 * A * (A - 1 + (A + 1) * cos_w0);
-      b[2] = A * (A + 1 + (A - 1) * cos_w0 - 2 * sqrtA * alpha);
-      a[0] = A + 1 - (A - 1) * cos_w0 + 2 * sqrtA * alpha;
-      a[1] = 2 * (A - 1 - (A + 1) * cos_w0);
-      a[2] = A + 1 - (A - 1) * cos_w0 - 2 * sqrtA * alpha;
-
-      // Normalize coefficients so that a[0] = 1
-      b = b.map((coef) => coef / a[0]);
-      a = a.map((coef) => coef / a[0]);
-      a[0] = 1;
-    } else {
-      throw new Error("Unsupported filter type");
-    }
+  constructor(a: number[], b: number[], rate: number) {
+    [a, b] = convertToSampleRate(a, b, rate);
 
     this.a = a;
     this.b = b;

@@ -4,6 +4,7 @@ export interface LufsMeterResult {
   integratedLufs: number;
   blockLoudness: Float32Array;
   relativeThreshold: number;
+  maxLoudness: number;
 }
 
 export class LufsMeter {
@@ -29,12 +30,12 @@ export class LufsMeter {
 
     // Step 3: Calculate loudness for each block (combine channels at block level)
     const blockLoudness = new Float32Array(numBlocks);
-    for (let i = 0; i < numBlocks; i++) {
-      const start = i * hopSize;
+    const blockRms = inputs.map(() => new Float32Array(numBlocks));
+    for (let blockIdx = 0; blockIdx < numBlocks; blockIdx++) {
+      const start = blockIdx * hopSize;
       const end = start + blockSize;
       // For each channel, get the block, then average the mean square across channels
-      let meanSquareSum = 0;
-      for (let ch = 0; ch < filteredChannels.length; ch++) {
+      blockRms.forEach((rmsResult, ch) => {
         const block = filteredChannels[ch].subarray(
           start,
           Math.min(end, length)
@@ -43,66 +44,86 @@ export class LufsMeter {
         for (let j = 0; j < block.length; j++) {
           sum += block[j] * block[j];
         }
-        meanSquareSum += sum / block.length;
-      }
-      const meanSquare = meanSquareSum / filteredChannels.length;
-      // LUFS = -0.691 + 10 * log10(meanSquare)
-      blockLoudness[i] = -0.691 + 10 * Math.log10(meanSquare + Number.EPSILON);
+        rmsResult[blockIdx] += sum / block.length;
+      });
+      // LUFS = -0.691 + 10 * log10(sum of mean square of each channel)
+      blockLoudness[blockIdx] =
+        -0.691 +
+        10 *
+          Math.log10(
+            // Simple sum of each channel
+            // TODO: update to have channel-specific gain
+            blockRms.reduce((s, r) => s + r[blockIdx], 0) + Number.EPSILON
+          );
     }
 
     // Step 4: Calculate relative threshold (gating)
-    const mean = this.mean(blockLoudness);
-    const relativeThreshold = Math.max(mean - 10.0, LufsMeter.ABSOLUTE_GATE);
+    // Blocks with loudness above the absolute gate
+    const initialGatedBlocks = blockLoudness
+      .entries()
+      .filter(([, l]) => l >= LufsMeter.ABSOLUTE_GATE)
+      .map(([i]) => i)
+      .toArray();
+    const perChannelMeans = blockRms.map(
+      (rms) =>
+        initialGatedBlocks.reduce((sum, blockIdx) => {
+          return sum + rms[blockIdx];
+        }, 0) / initialGatedBlocks.length
+    );
 
-    // Step 5: Apply gating
-    const gatedBlocks = [];
-    for (let i = 0; i < blockLoudness.length; i++) {
-      if (blockLoudness[i] > relativeThreshold) {
-        gatedBlocks.push(Math.pow(10, blockLoudness[i] / 10));
-      }
-    }
+    // Simple sum of each channel
+    // TODO: update to have channel-specific gain
+    const sumOfMeans = perChannelMeans.reduce((sum, mean) => sum + mean, 0);
+
+    const relativeThreshold = -0.691 + 10 * Math.log10(sumOfMeans) - 10;
+
+    // Apply gating to blocks
+    const finalGatedBlocks = blockLoudness
+      .entries()
+      .filter(([, l]) => l > LufsMeter.ABSOLUTE_GATE && l > relativeThreshold)
+      .map(([i]) => i)
+      .toArray();
+
+    const avergePerChannel = blockRms.map(
+      (rmsBlocks) =>
+        finalGatedBlocks.reduce((sum, blockIdx) => {
+          return sum + rmsBlocks[blockIdx];
+        }, 0) / finalGatedBlocks.length
+    );
 
     // Step 6: Integrated loudness
     let integratedLufs = LufsMeter.ABSOLUTE_GATE;
-    if (gatedBlocks.length > 0) {
-      const gatedMean =
-        gatedBlocks.reduce((a, b) => a + b, 0) / gatedBlocks.length;
-      integratedLufs = 10 * Math.log10(gatedMean);
+    if (finalGatedBlocks.length > 0) {
+      // Simple sum of each channel
+      // TODO: update to have channel-specific gain
+      const sumOfAverages = avergePerChannel.reduce((sum, avg) => sum + avg, 0);
+      integratedLufs = -0.691 + 10 * Math.log10(sumOfAverages);
     }
 
     return {
       integratedLufs,
       blockLoudness,
       relativeThreshold,
+      maxLoudness: Math.max(...blockLoudness),
     };
   }
 
   private applyKWeighting(input: Float32Array): Float32Array {
     // K-weighting: cascade of highpass and shelving filters
     const highShelf = new IirFilter(
-      4,
-      Math.SQRT1_2,
-      1500,
-      this.sampleRate,
-      "HIGH_SHELF"
+      [1.0, -1.69065929318241, 0.73248077421585],
+      [1.53512485958697, -2.69169618940638, 1.19839281085285],
+      this.sampleRate
     );
-    const highPass = new IirFilter(0, 0.5, 38, this.sampleRate, "HIGH_PASS");
-    // const highpass = new IirFilter("HIGH_PASS", this.sampleRate, 40, 0.0, 1);
+    const highPass = new IirFilter(
+      [1.0, -1.99004745483398, 0.99007225036621],
+      [1, -2, 1],
+      this.sampleRate
+    );
     const shelved = highShelf.process(input);
     const highpassed = highPass.process(shelved);
 
     return highpassed;
-  }
-
-  private blockLoudness(block: Float32Array): number {
-    // Mean square
-    let sum = 0;
-    for (let i = 0; i < block.length; i++) {
-      sum += block[i] * block[i];
-    }
-    const meanSquare = sum / block.length;
-    // LUFS = -0.691 + 10 * log10(meanSquare)
-    return -0.691 + 10 * Math.log10(meanSquare + Number.EPSILON);
   }
 
   private mean(arr: Float32Array): number {
