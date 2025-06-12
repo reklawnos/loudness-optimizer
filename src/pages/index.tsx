@@ -129,7 +129,7 @@ export default function Home() {
   const onUploadClick = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "audio/*";
+    input.accept = "audio/*,.wav,.aif,.aiff,.flac,.alac,.aac,.ogg,.mp3,.m4a";
     input.onchange = (e) => {
       handleDrop({
         dataTransfer: { files: e.target.files },
@@ -258,8 +258,9 @@ export default function Home() {
               >
                 {isPlaying ? "Pause" : "Play"}
               </button>
+              <div className="flex-grow"></div>
               <button
-                className="ml-auto justify-self-end border focus:outline-none focus:ring-4 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700 min-w-24"
+                className="justify-self-end border focus:outline-none focus:ring-4 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 bg-gray-800 text-white border-gray-600 hover:bg-gray-700 hover:border-gray-600 focus:ring-gray-700 min-w-24"
                 onClick={onUploadClick}
               >
                 Upload new file
