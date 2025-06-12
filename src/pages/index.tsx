@@ -36,7 +36,7 @@ function useAudioDrop(
       if (!file || !file.type.startsWith("audio/")) return;
 
       const arrayBuffer = await file.arrayBuffer();
-      const audioCtx = new window.AudioContext();
+      const audioCtx = new window.AudioContext({ sampleRate: 48000 });
       const reader = new FileReader();
       reader.readAsDataURL(file);
       try {

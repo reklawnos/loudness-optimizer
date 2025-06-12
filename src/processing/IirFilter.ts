@@ -1,6 +1,7 @@
 // Adapted from https://github.com/klangfreund/LUFSMeter
 // License: MIT
 // Original author: Markus Schmidt
+// TODO: this conversion is broken, will need to fix later
 function convertToSampleRate(
   a: number[],
   b: number[],
