@@ -159,7 +159,7 @@ export default function Home() {
       <Head>
         <title>LUFS Gating Tool</title>
       </Head>
-      <main className="p-10">
+      <main className="p-2 md:p-10">
         <h1 className="font-bold text-xl mb-4">LUFS Gating Tool</h1>
         <div>
           <div style={{ display: "none" }}>
@@ -248,7 +248,7 @@ export default function Home() {
                 <LineHighlightPlot />
               </ChartContainer>
             </div>
-            <div className="flex mt-4 gap-8 p-6 flex-wrap">
+            <div className="flex mt-4 gap-8 p-2 md:p-6 flex-wrap">
               <div className="text-xl font-medium text-white p-2.5 px-0">
                 {formatTimeStamp(playheadPos)}
               </div>
@@ -267,7 +267,7 @@ export default function Home() {
               </button>
             </div>
             <div className="flex flex-wrap justify-start mt-4 items-start">
-              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+              <div className="flex max-w-sm items-center gap-x-4 p-2 pb-6 md:p-6 min-w-80">
                 <div>
                   <p className="text-gray-400">Integrated loudness</p>
                   <div className="text-xl font-medium text-white">
@@ -286,7 +286,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+              <div className="flex max-w-sm items-center gap-x-4 p-2 pb-6 md:p-6 min-w-80">
                 <div>
                   <p className="text-gray-400">Relative gating threshold</p>
                   <div className="text-xl font-medium text-white">
@@ -300,7 +300,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="flex max-w-sm items-center gap-x-4 p-6 min-w-80">
+              <div className="flex max-w-sm items-center gap-x-4 p-2 pb-6 md:p-6 min-w-80">
                 <div>
                   <p className="text-gray-400">Measurements above threshold</p>
                   <div className="text-xl font-medium text-white">
